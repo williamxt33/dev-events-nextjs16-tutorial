@@ -1,16 +1,30 @@
 "use client";
 
+import { creatBooking } from "@/lib/actions/booking.action";
+import posthog from "posthog-js";
 import { useState } from "react";
 
-const BookEvent = () => {
+const BookEvent = ({ eventId, slug }: { eventId: string; slug: string }) => {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSUbmit = (e: React.FormEvent) => {
+  const handleSUbmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTimeout(() => {
+    setError("");
+
+    const result = await creatBooking({ eventId, slug, email });
+
+    if (result.success) {
       setSubmitted(true);
-    }, 1000);
+      posthog.capture("event_booked", { eventId, slug, email });
+    } else if (result.error === "duplicate") {
+      setError("You have already booked this event with that email.");
+    } else {
+      console.error("Booking creation failed");
+      posthog.captureException("Booking creation failed");
+      setError("Something went wrong. Please try again.");
+    }
   };
 
   return (
@@ -24,14 +38,13 @@ const BookEvent = () => {
             <input
               type="email"
               value={email}
-              onChange={(e) => {
-                e.target.value;
-              }}
+              onChange={(e) => setEmail(e.target.value)}
               id="email"
               placeholder="Enter your email address"
             />
           </div>
 
+          {error && <p className="text-sm text-red-500">{error}</p>}
           <button type="submit" className="button-submit">
             Submit
           </button>

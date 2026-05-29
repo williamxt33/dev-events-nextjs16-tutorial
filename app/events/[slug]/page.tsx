@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import Image from "next/image";
 import BookEvent from "@/app/components/BookEvent";
 import EventCard from "@/app/components/EventCard";
 import { getSimilarEventsBySlug } from "@/lib/actions/event.actions";
 import type { IEvent } from "@/database/event.model";
+import { cacheLife } from "next/cache";
 
 const Base_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -49,15 +51,31 @@ const EventTags = ({ tags }: { tags: string[] }) => {
   );
 };
 
-const EventDetailsPage = async ({
+const getEventData = async (slug: string) => {
+  "use cache";
+  cacheLife("hours");
+
+  const request = await fetch(`${Base_URL}/api/events/${slug}`);
+  return request.json();
+};
+
+const getSimilarEventsCached = async (slug: string) => {
+  "use cache";
+  cacheLife("hours");
+
+  return getSimilarEventsBySlug(slug);
+};
+
+const EventContent = async ({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) => {
   const { slug } = await params;
-  const request = await fetch(`${Base_URL}/api/events/${slug}`);
+
   const {
     event: {
+      _id: eventId,
       description,
       image,
       overview,
@@ -70,15 +88,13 @@ const EventDetailsPage = async ({
       tags,
       organizer,
     },
-  } = await request.json();
+  } = await getEventData(slug);
 
   if (!description) return notFound();
 
   const bookings = 10;
 
-  const similarEvents: IEvent[] = await getSimilarEventsBySlug(slug);
-
-  console.log(similarEvents);
+  const similarEvents: IEvent[] = await getSimilarEventsCached(slug);
 
   return (
     <section id="event">
@@ -137,7 +153,7 @@ const EventDetailsPage = async ({
               <p className="text-sm">Be the first to book your spot!</p>
             )}
 
-            <BookEvent />
+            <BookEvent eventId={eventId} slug={slug} />
           </div>
         </aside>
       </div>
@@ -152,6 +168,18 @@ const EventDetailsPage = async ({
         </div>
       </div>
     </section>
+  );
+};
+
+const EventDetailsPage = ({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) => {
+  return (
+    <Suspense fallback={<div>Loading event...</div>}>
+      <EventContent params={params} />
+    </Suspense>
   );
 };
 
